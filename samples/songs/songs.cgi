@@ -9,4 +9,3 @@ require"wsapi.cgi"
 require"songs"
 
 wsapi.cgi.run(songs.run)
-

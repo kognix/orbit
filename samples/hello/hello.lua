@@ -45,23 +45,22 @@ hello:dispatch_get(say, "/say/(%a+)")
 -- This is a convenience function for the common parts of a page
 
 function render_layout(inner_html)
-   return html{
-     head{ title"Hello" },
-     body{ inner_html }
-   }
+  return html{
+    head{ title"Hello" },
+    body{ inner_html }
+  }
 end
 
 function render_hello()
-   return p.hello"Hello World!"
+  return p.hello"Hello World!"
 end
 
 function render_index()
-   return render_layout(render_hello())
+  return render_layout(render_hello())
 end
 
 function render_say(web, name)
-   return render_layout(render_hello() .. 
-     p.hello((web.input.greeting or "Hello ") .. name .. "!"))
+  return render_layout(render_hello() .. p.hello((web.input.greeting or "Hello ") .. name .. "!"))
 end
 
 orbit.htmlify(hello, "render_.+")

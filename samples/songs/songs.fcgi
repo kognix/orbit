@@ -9,4 +9,3 @@ require"wsapi.fastcgi"
 require"songs"
 
 wsapi.fastcgi.run(songs.run)
-

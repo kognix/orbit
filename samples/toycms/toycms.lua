@@ -19,64 +19,62 @@ mapper.conn = env:connect(unpack(database.conn_data))
 mapper.driver = database.driver
 
 models = {
-   post = toycms:model "post",
-   comment = toycms:model "comment",
-   section = toycms:model "section",
-   user = toycms:model "user"
+  post = toycms:model "post",
+  comment = toycms:model "comment",
+  section = toycms:model "section",
+  user = toycms:model "user"
 }
 
 cache = orbit.cache.new(toycms, cache_path)
 
 function models.post:find_comments()
-   return models.comment:find_all_by_approved_and_post_id{ true,
-      self.id }
+  return models.comment:find_all_by_approved_and_post_id{ true, self.id }
 end
 
 function models.post:find_months(section_ids)
-   local months = {}
-   local previous_month = {}
-   local posts = self:find_all_by_published_and_section_id{
-      order = "published_at desc", true, section_ids }
-   for _, post in ipairs(posts) do
-      local date = os.date("*t", post.published_at)
-      if previous_month.month ~= date.month or
-	 previous_month.year ~= date.year then
-	 previous_month = { month = date.month, year = date.year }
-	 months[#months + 1] = previous_month
-      end
-   end
-   return months
+  local months = {}
+  local previous_month = {}
+  local posts = self:find_all_by_published_and_section_id{ order = "published_at desc", true, section_ids }
+  for _, post in ipairs(posts) do
+    local date = os.date("*t", post.published_at)
+    if previous_month.month ~= date.month or previous_month.year ~= date.year then
+      previous_month = { month = date.month, year = date.year }
+      months[#months + 1] = previous_month
+    end
+  end
+  return months
 end
 
 function models.comment:make_link()
-   local author = self.author or strings.anonymous_author
-   if self.url and self.url ~= "" then
-      return "<a href=\"" .. self.url .. "\">" .. author .. "</a>"
-   elseif self.email and self.email ~= "" then
-      return "<a href=\"mailto:" .. self.email .. "\">" .. author .. "</a>"
-   else
-      return author
-   end
+  local author = self.author or strings.anonymous_author
+  if self.url and self.url ~= "" then
+    return "<a href=\"" .. self.url .. "\">" .. author .. "</a>"
+  end
+  
+  if self.email and self.email ~= "" then
+    return "<a href=\"mailto:" .. self.email .. "\">" .. author .. "</a>"
+  end
+  
+  return author
 end
 
 function models.section:find_by_tags(tags)
-   return self:find_all("tag like ?", tags)
+  return self:find_all("tag like ?", tags)
 end
 
 local template_cache = {}
 
 function load_template(name)
-   local template = template_cache[name]
-   if not template then
-      local template_file = io.open(toycms.real_path .. "/templates/" ..
-				    template_name .. "/" .. name, "rb")
-      if template_file then
-  	 template = cosmo.compile(template_file:read("*a"))
-	 template_cache[name] = template
-	 template_file:close()
-      end
-   end
-   return template
+  local template = template_cache[name]
+  if not template then
+    local template_file = io.open(toycms.real_path .. "/templates/" .. template_name .. "/" .. name, "rb")
+    if template_file then
+      template = cosmo.compile(template_file:read("*a"))
+      template_cache[name] = template
+      template_file:close()
+    end
+  end
+  return template
 end
 
 function load_plugin(name)
@@ -126,13 +124,11 @@ function new_post_env(web, post, section)
   env.id = post.id
   env.title = post.title
   env.abstract = post.abstract
-  env.body = cosmo.fill(post.body,
-    { image_vpath = (image_vpath or web:static_link("/images")) .. "/" .. post.id })
+  env.body = cosmo.fill(post.body, { image_vpath = (image_vpath or web:static_link("/images")) .. "/" .. post.id })
   env.markdown_body = markdown(env.body)
   env.day_padded = os.date("%d", post.published_at)
   env.day = tonumber(env.day_padded)
-  env.month_name = month_names[tonumber(os.date("%m",
-    post.published_at))]
+  env.month_name = month_names[tonumber(os.date("%m", post.published_at))]
   env.month_padded = os.date("%m", post.published_at)
   env.month = tonumber(env.month_padded)
   env.year = tonumber(os.date("%Y", post.published_at))
@@ -151,8 +147,7 @@ function new_post_env(web, post, section)
   env.section_uri = web:link("/section/" .. post.section_id)
   section = section or models.section:find(post.section_id) 
   env.section_title = section.title
-  env.image_uri = (image_vpath or web:static_link("/images")) .. "/" .. post.id ..
-    "/" .. (post.image or "")
+  env.image_uri = (image_vpath or web:static_link("/images")) .. "/" .. post.id .. "/" .. (post.image or "")
   env.if_image = cosmo.cond(not web:empty(post.image), env)
   local form_env = {}
   form_env.author = web.input.author or ""
@@ -165,23 +160,22 @@ function new_post_env(web, post, section)
   env.if_error_comment = cosmo.cond(not web:empty_param("error_comment"), env)
   env.if_comments = cosmo.cond((post.n_comments or 0) > 0, env)
   env.comments = function (arg, has_block)
-		   local comments = post:find_comments()
-		   local out, template
-		   if not has_block then
-		     local out = {}
-		     local template = load_template((arg and arg.template) or 
-						  "comment.html")
-		   end
-		   for _, comment in ipairs(comments) do
-		     if has_block then
-		       cosmo.yield(new_comment_env(web, comment))
-		     else
-		       local tdata = template(new_comment_env(web, comment))
-		       table.insert(out, tdata)
-		     end
-		   end
-		   if not has_block then return table.concat(out, "\n") end
-		 end
+    local comments = post:find_comments()
+    local out, template
+    if not has_block then
+      local out = {}
+      local template = load_template((arg and arg.template) or "comment.html")
+    end
+    for _, comment in ipairs(comments) do
+      if has_block then
+        cosmo.yield(new_comment_env(web, comment))
+      else
+        local tdata = template(new_comment_env(web, comment))
+        table.insert(out, tdata)
+      end
+    end
+    if not has_block then return table.concat(out, "\n") end
+  end
   env.add_comment_uri = web:link("/post/" .. post.id .. "/addcomment")
   return env
 end
@@ -194,8 +188,7 @@ function new_comment_env(web, comment)
   env.time_string = time(comment.created_at)
   env.day_padded = os.date("%d", comment.created_at)
   env.day = tonumber(env.day_padded)
-  env.month_name = month_names[tonumber(os.date("%m",
-    comment.created_at))]
+  env.month_name = month_names[tonumber(os.date("%m", comment.created_at))]
   env.month_padded = os.date("%m", comment.created_at)
   env.month = tonumber(env.month_padded)
   env.year = tonumber(os.date("%Y", comment.created_at))
@@ -208,77 +201,59 @@ function new_comment_env(web, comment)
 end
 
 function home_page(web)
-   local template = load_template("home.html")
-   if template then
-      return layout(web, template(new_template_env(web)))
-   else
-      return not_found(web)
-   end
+  local template = load_template("home.html")
+  if not template then return not_found(web) end
+  return layout(web, template(new_template_env(web)))
 end
 
 toycms:dispatch_get(cache(home_page), "/")
 
 function home_xml(web)
-   local template = load_template("home.xml")
-   if template then
-      web.headers["Content-Type"] = "text/xml"
-      return template(new_template_env(web))
-   else
-      return not_found(web)
-   end
+  local template = load_template("home.xml")
+  if not template then return not_found(web) end
+  web.headers["Content-Type"] = "text/xml"
+  return template(new_template_env(web))
 end
 
 toycms:dispatch_get(cache(home_xml), "/xml")
 
 function view_section(type)
    return function (web, section_id)
-	     local section = models.section:find(tonumber(section_id))
-	     if not section then return not_found(web) end
-	     local template = load_template("section_" .. 
-					    tostring(section.tag) ..
-					    "." .. type) or
-	                      load_template("section." .. type)
-	     if template then
-		web.input.section_id = tonumber(section_id)
-		local env = new_section_env(web, section)
-		if type == "xml" then
-		   web.headers["Content-Type"] = "application/atom+xml"
-		   return template(env)
-		else
-		   return layout(web, template(env))
-		end
-	     else
-		return not_found(web)
-	     end
-	  end
+    local section = models.section:find(tonumber(section_id))
+    if not section then return not_found(web) end
+    
+    local template = load_template("section_" .. tostring(section.tag) .. "." .. type) or load_template("section." .. type)
+    if not template then return not_found(web) end
+    web.input.section_id = tonumber(section_id)
+    local env = new_section_env(web, section)
+    if type ~= "xml" then
+      web.headers["Content-Type"] = "application/atom+xml"
+      return template(env)
+    end
+    return layout(web, template(env))
+  end
 end
 
 toycms:dispatch_get(cache(view_section("html")), "/section/(%d+)")
 toycms:dispatch_get(cache(view_section("xml")), "/section/(%d+)/xml")
 
 function view_post(type)
-   return function (web, post_id)
-	     local post = models.post:find(tonumber(post_id))
-	     if not post then return not_found(web) end
-	     local section = models.section:find(post.section_id)
-	     local template = load_template("post_" .. 
-					    tostring(section.tag) ..
-					    "." .. type) or
-	                      load_template("post." .. type)
-	     if template then
-		web.input.section_id = post.section_id
-		web.input.post_id = tonumber(post_id)
-		local env = new_post_env(web, post, section)
-		if type == "xml" then
-		   web.headers["Content-Type"] = "application/atom+xml"
-		   return template(env)
-		else
-		   return layout(web, template(env))
-		end
-	     else
-		return not_found(web)
-	     end
-	  end
+  return function (web, post_id)
+    local post = models.post:find(tonumber(post_id))
+    if not post then return not_found(web) end
+    
+    local section = models.section:find(post.section_id)
+    local template = load_template("post_" .. tostring(section.tag) .. "." .. type) or load_template("post." .. type)
+    if not template then return not_found(web) end
+    web.input.section_id = post.section_id
+    web.input.post_id = tonumber(post_id)
+    local env = new_post_env(web, post, section)
+    if type == "xml" then
+      web.headers["Content-Type"] = "application/atom+xml"
+      return template(env)
+    end
+    return layout(web, template(env))
+  end
 end
 
 toycms:dispatch_get(cache(view_post("html")), "/post/(%d+)")
@@ -286,74 +261,70 @@ toycms:dispatch_get(cache(view_post("xml")), "/post/(%d+)/xml")
 
 function archive(web, year, month)
    local template = load_template("archive.html")
-   if template then
-      web.input.month = tonumber(month)
-      web.input.year = tonumber(year)
-      local env = new_template_env(web)
-      env.archive_month = web.input.month
-      env.archive_month_name = month_names[web.input.month]
-      env.archive_year = web.input.year
-      env.archive_month_padded = month
-      return layout(web, template(env))
-   else
-      not_found(web)
-   end
+   if not template then return not_found(web) end
+   
+   web.input.month = tonumber(month)
+   web.input.year = tonumber(year)
+   local env = new_template_env(web)
+   env.archive_month = web.input.month
+   env.archive_month_name = month_names[web.input.month]
+   env.archive_year = web.input.year
+   env.archive_month_padded = month
+   
+   return layout(web, template(env))
 end
-  
 toycms:dispatch_get(cache(archive), "/archive/(%d+)/(%d+)")
 
 function add_comment(web, post_id)
-   if web:empty_param("comment") then
-      web.input.error_comment = "1"
-      return web:redirect(web:link("/post/" .. post_id, web.input))
-   else
-      local post = models.post:find(tonumber(post_id))
-      if web:empty(post.comment_status) or 
-	   post.comment_status == "closed" then
-	 return web:redirect(web:link("/post/" .. post_id))
-      else
-	 local comment = models.comment:new()
-	 comment.post_id = post.id
-	 local body = web:sanitize(web.input.comment)
-	 comment.body = markdown(body)
-	 if not web:empty_param("author") then
-	    comment.author = web.input.author
-	 end
-	 if not web:empty_param("email") then
-	    comment.email = web.input.email
-	 end
-	 if not web:empty_param("url") then
-	    comment.url = web.input.url
-	 end
-	 if post.comment_status == "unmoderated" then
-	    comment.approved = true
-	    post.n_comments = (post.n_comments or 0) + 1
-	    post:save()
-	    cache:invalidate("/", "/xml", "/section/" .. post.section_id,
-			  "/section/" .. post.section_id .. "/xml",
-			  "/post/" .. post.id, "/post/" .. post.id .. "/xml",
-			  "/archive/" .. 
-				os.date("%Y/%m", post.published_at))
-	 else comment.approved = false end
-	 comment:save()
-	 return web:redirect(web:link("/post/" .. post_id))
-      end
-   end
+  if web:empty_param("comment") then
+    web.input.error_comment = "1"
+    return web:redirect(web:link("/post/" .. post_id, web.input))
+  end
+  
+  local post = models.post:find(tonumber(post_id))
+  if web:empty(post.comment_status) or post.comment_status == "closed" then
+    return web:redirect(web:link("/post/" .. post_id))
+  end
+  
+  local comment = models.comment:new()
+  comment.post_id = post.id
+  local body = web:sanitize(web.input.comment)
+  comment.body = markdown(body)
+  if not web:empty_param("author") then
+    comment.author = web.input.author
+  end
+  
+  if not web:empty_param("email") then
+    comment.email = web.input.email
+  end
+  
+  if not web:empty_param("url") then
+    comment.url = web.input.url
+  end
+  
+  if post.comment_status == "unmoderated" then
+    comment.approved = true
+    post.n_comments = (post.n_comments or 0) + 1
+    post:save()
+    cache:invalidate("/", "/xml", "/section/" .. post.section_id, "/section/" .. post.section_id .. "/xml", "/post/" .. post.id, "/post/" .. post.id .. "/xml", "/archive/" .. os.date("%Y/%m", post.published_at))
+  else
+    comment.approved = false
+  end
+  comment:save()
+  return web:redirect(web:link("/post/" .. post_id))
 end
-
 toycms:dispatch_post(add_comment, "/post/(%d+)/addcomment")
 
 toycms:dispatch_static("/templates/.+", "/images/.+")
 
 function layout(web, inner_html)
-   local layout_template = load_template("layout.html")
-   if layout_template then
-      local env = new_template_env(web)
-      env.view = inner_html
-      return layout_template(env)
-   else
-      return inner_html
-   end
+  local layout_template = load_template("layout.html")
+  if layout_template then
+    local env = new_template_env(web)
+    env.view = inner_html
+    return layout_template(env)
+  end
+  return inner_html
 end
 
 function check_user(web)
