@@ -24,15 +24,20 @@ local ONE_HOUR = 60 * 60
 local ONE_DAY = 24 * ONE_HOUR
 
 local op_loader = common.make_isolated_launcher{
-  filename = nil,          -- if you want to force the launch of a single script
-  launcher = "op.fcgi",    -- the name of this launcher
-  modname = "orbit.pages", -- WSAPI application that processes the script
-  reload = false,          -- if you want to reload the application on every request
-  period = ONE_HOUR,       -- frequency of Lua state staleness checks
-  ttl = ONE_DAY,           -- time-to-live for Lua states
-  vars =                   -- order of checking for the path of the script
-   { "SCRIPT_FILENAME",
-     "PATH_TRANSLATED" } 
+  -- if you want to force the launch of a single script
+  filename = nil,
+  -- the name of this launcher
+  launcher = "op.fcgi",
+  -- WSAPI application that processes the script
+  modname = "orbit.pages",
+  -- if you want to reload the application on every request
+  reload = false,
+  -- frequency of Lua state staleness checks
+  period = ONE_HOUR,
+  -- time-to-live for Lua states
+  ttl = ONE_DAY,
+  -- order of checking for the path of the script
+  vars = { "SCRIPT_FILENAME", "PATH_TRANSLATED" }
 }
 
 wsapi.fastcgi.run(op_loader)

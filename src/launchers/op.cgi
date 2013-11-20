@@ -22,6 +22,6 @@ local arg_filename = (...)
 local function op_loader(wsapi_env)
   common.normalize_paths(wsapi_env, arg_filename, "op.cgi", { "SCRIPT_FILENAME", "PATH_TRANSLATED" })
   return op.run(wsapi_env)
-end 
+end
 
 cgi.run(op_loader)

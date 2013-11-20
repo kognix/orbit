@@ -20,17 +20,15 @@ end
 function type_names.mysql(t)
   if t == "number(1)" then
     return "boolean"
-  else
-    return string.lower(string.match(t, "(%a+)"))
   end
+  return string.lower(string.match(t, "(%a+)"))
 end
 
 function type_names.postgres(t)
   if t == "bool" then
     return "boolean"
-  else
-    return string.lower(string.match(t, "(%a+)"))
   end
+  return string.lower(string.match(t, "(%a+)"))
 end
 
 local convert = {}
@@ -74,13 +72,17 @@ end
 function convert.boolean(v, driver)
   if driver == "sqlite3" then
     return v == "t"
-  elseif driver == "mysql" then
-    return tonumber(v) == 1
-  elseif driver == "postgres" then
-    return v == "t"
-  else
-    error("driver not supported")
   end
+
+  if driver == "mysql" then
+    return tonumber(v) == 1
+  end
+
+  if driver == "postgres" then
+    return v == "t"
+  end
+
+  error("driver not supported")
 end
 
 function convert.binary(v)
@@ -88,11 +90,15 @@ function convert.binary(v)
 end
 
 function convert.datetime(v)
-  local year, month, day, hour, min, sec =
-    string.match(v, "(%d+)%-(%d+)%-(%d+) (%d+):(%d+):(%d+)")
-  return os.time({ year = tonumber(year), month = tonumber(month),
-		   day = tonumber(day), hour = tonumber(hour),
-		   min = tonumber(min), sec = tonumber(sec) })
+  local year, month, day, hour, min, sec = string.match(v, "(%d+)%-(%d+)%-(%d+) (%d+):(%d+):(%d+)")
+  return os.time({
+    year = tonumber(year),
+    month = tonumber(month),
+    day = tonumber(day),
+    hour = tonumber(hour),
+    min = tonumber(min),
+    sec = tonumber(sec)
+  })
 end
 convert.timestamp = convert.datetime
 
@@ -100,10 +106,10 @@ local function convert_types(row, meta, driver)
   for k, v in pairs(row) do
     if meta[k] then
       local conv = convert[meta[k].type]
-      if conv then
+      if not conv then
         row[k] = conv(v, driver)
       else
-        error("no conversion for type " .. meta[k].type)
+        error("No conversion for type " .. meta[k].type)
       end
     end
   end
@@ -144,7 +150,7 @@ function escape.string(v, driver, conn)
 end
 
 function escape.text(v, driver, conn)
-  return "'" .. conn:escape(v) .. "'"
+  return escape.varchar(v, driver, conn)
 end
 
 function escape.datetime(v)
@@ -153,11 +159,10 @@ end
 escape.timestamp = escape.datetime
 
 function escape.boolean(v, driver)
-  if v then
-    if driver == "sqlite3" or driver == "postgres" then return "'t'" else return tostring(v) end
-  else
-    if driver == "sqlite3" or driver == "postgres" then return "'f'" else return tostring(v) end
+  if driver == "sqlite3" or driver == "postgres" then
+    return v and "'t'" or "'f'"
   end
+  return tostring(v)
 end
 
 function escape.binary(v, driver, conn)
@@ -172,9 +177,9 @@ local function escape_values(row)
     else
       local esc = escape[m.type]
       if esc then
-	row_escaped[m.name] = esc(row[m.name], row.driver, row.model.conn)
+        row_escaped[m.name] = esc(row[m.name], row.driver, row.model.conn)
       else
-	error("no escape function for type " .. m.type)
+        error("no escape function for type " .. m.type)
       end
     end
   end
@@ -215,11 +220,11 @@ local function parse_condition(dao, condition, args)
     local i = #pairs + 1
     local value
     if args[i] == nil then
-      pairs[i] = field .. " is null"
+      pairs[i] = field .. " IS NULL"
     elseif type(args[i]) == "table" then
       local values = {}
       for _, value in ipairs(args[i]) do
-	values[#values + 1] = escape[dao.meta[field].type](value, dao.driver, dao.model.conn)
+        values[#values + 1] = escape[dao.meta[field].type](value, dao.driver, dao.model.conn)
       end
       pairs[i] = field .. " IN (" .. table.concat(values,", ") .. ")"
     else
@@ -234,11 +239,11 @@ local function build_inject(project, inject, dao)
   local fields = {}
   if project then
      for i, field in ipairs(project) do
-	fields[i] = dao.table_name .. "." .. field .. " as " .. field
+  fields[i] = dao.table_name .. "." .. field .. " as " .. field
      end
   else
      for i, field in ipairs(dao.meta) do
-	fields[i] = dao.table_name .. "." .. field.name .. " as " .. field.name
+  fields[i] = dao.table_name .. "." .. field.name .. " as " .. field.name
      end
   end
   local inject_fields = {}
@@ -258,7 +263,7 @@ local function build_query_by(dao, condition, args)
   local pairs = parse_condition(dao, condition, args)
   local order = ""
   local field_list, table_list, select, limit
-  if args.distinct then select = "select distinct " else select = "select " end
+  if args.distinct then select = "SELECT DISTINCT " else select = "SELECT " end
   if tonumber(args.count) then limit = " limit " .. tonumber(args.count) else limit = "" end
   if args.order then order = " order by " .. args.order end
   if args.inject then
@@ -272,8 +277,8 @@ local function build_query_by(dao, condition, args)
     end
     table_list = dao.table_name
   end
-  local sql = select .. field_list .. " from " .. table_list ..
-    " where " .. table.concat(pairs, " and ") .. order .. limit
+  local sql = select .. field_list .. " FROM " .. table_list ..
+    " where " .. table.concat(pairs, " AND ") .. order .. limit
   if dao.model.logging then log_query(sql) end
   return sql
 end
@@ -305,10 +310,9 @@ end
 
 function model_methods:new(name, dao)
   dao = dao or {}
-  dao.model, dao.name, dao.table_name, dao.meta, dao.driver = self, name,
-    self.table_prefix .. name, {}, self.driver
+  dao.model, dao.name, dao.table_name, dao.meta, dao.driver = self, name, self.table_prefix .. name, {}, self.driver
   setmetatable(dao, { __index = dao_index })
-  local sql = "select * from " .. dao.table_name .. " limit 0"
+  local sql = "select * from " .. dao.table_name .. " LIMIT 0"
   if self.logging then log_query(sql) end
   local cursor, err = self.conn:execute(sql)
   if not cursor then error(err) end
@@ -327,23 +331,31 @@ function recycle(fresh_conn, timeout)
   local created_at = os.time()
   local conn = fresh_conn()
   timeout = timeout or 20000
-  return setmetatable({}, { __index = function (tab, meth)
-					 tab[meth] = function (tab, ...)
-							if created_at + timeout < os.time() then
-							   created_at = os.time()
-							   pcall(conn.close, conn)
-							   conn = fresh_conn()
-							end
-							return conn[meth](conn, ...)
-						     end
-					 return tab[meth]
-				      end
-			 })
+  return setmetatable({}, {
+    __index = function (tab, meth)
+      tab[meth] = function (tab, ...)
+        if created_at + timeout < os.time() then
+          created_at = os.time()
+          pcall(conn.close, conn)
+          conn = fresh_conn()
+        end
+        return conn[meth](conn, ...)
+      end
+      return tab[meth]
+    end
+  })
 end
 
 function new(table_prefix, conn, driver, logging)
+  table_prefix = table_prefix or ""
   driver = driver or "sqlite3"
-  local app_model = { table_prefix = table_prefix or "", conn = conn, driver = driver or "sqlite3", logging = logging, models = {} }
+  local app_model = {
+    table_prefix = table_prefix,
+    conn = conn,
+    driver = driver,
+    logging = logging,
+    models = {}
+  }
   setmetatable(app_model, { __index = model_methods })
   return app_model
 end
@@ -352,77 +364,91 @@ function dao_methods.find(dao, id, inject)
   if not type(id) == "number" then
     error("find error: id must be a number")
   end
-  local sql = "select * from " .. dao.table_name ..
-    " where id=" .. id
+  local sql = "SELECT * FROM " .. dao.table_name .. " WHERE id=" .. id
   if dao.logging then log_query(sql) end
   return fetch_row(dao, sql)
 end
 
 condition_parser = re.compile([[
-				  top <- {~ <condition>* ~}
-				  s <- %s+ -> ' ' / ''
-				  condition <- (<s> '(' <s> <condition> <s> ')' <s> / <simple>) (<conective> <condition>)*
-				  simple <- <s> (%func <field> <op> '?') -> apply <s> / <s> <field> <op> <field> <s> /
-				            <s> <field> <op> <s>
-				  field <- !<conective> {[_%w]+('.'[_%w]+)?}
-				  op <- {~ <s> [!<>=~]+ <s> / ((%s+ -> ' ') !<conective> %w+)+ <s> ~}
-				  conective <- [aA][nN][dD] / [oO][rR]
-			      ]], { func = lpeg.Carg(1) , apply = function (f, field, op) return f(field, op) end })
+  top <- {~ <condition>* ~}
+  s <- %s+ -> ' ' / ''
+  condition <- (<s> '(' <s> <condition> <s> ')' <s> / <simple>) (<conective> <condition>)*
+  simple <- <s> (%func <field> <op> '?') -> apply <s> / <s> <field> <op> <field> <s> /
+  <s> <field> <op> <s>
+  field <- !<conective> {[_%w]+('.'[_%w]+)?}
+  op <- {~ <s> [!<>=~]+ <s> / ((%s+ -> ' ') !<conective> %w+)+ <s> ~}
+  conective <- [aA][nN][dD] / [oO][rR]
+]], {
+  func = lpeg.Carg(1),
+  apply = function (f, field, op)
+    return f(field, op)
+  end
+})
 
 local function build_query(dao, condition, args)
   local i = 0
   args = args or {}
   condition = condition or ""
+  
   if type(condition) == "table" then
     args = condition
     condition = ""
   end
+  
   if condition ~= "" then
-    condition = " where " ..
-      condition_parser:match(condition, 1,
-		  function (field, op)
-		    i = i + 1
-		    if not args[i] then
-		      return "id=id"
-		    elseif type(args[i]) == "table" and args[i].type == "query" then
-			  return field .. " " .. op .. " (" .. args[i][1] .. ")"
-		    elseif type(args[i]) == "table" then
-		      local values = {}
-		      for j, value in ipairs(args[i]) do
-				values[#values + 1] = field .. " " .. op .. " " ..
-		          escape[dao.meta[field].type](value, dao.driver, dao.model.conn)
-              end
-		      return "(" .. table.concat(values, " or ") .. ")"
-            else
-		      return field .. " " .. op .. " " ..
-		        escape[dao.meta[field].type](args[i], dao.driver, dao.model.conn)
-            end
-		  end)
+    condition = " WHERE " .. condition_parser:match(condition, 1, function (field, op)
+      i = i + 1
+      if not args[i] then
+        return "id=id"
+      end
+      
+      if type(args[i]) == "table" and args[i].type == "query" then
+        return field .. " " .. op .. " (" .. args[i][1] .. ")"
+      end
+
+      if type(args[i]) == "table" then
+        local values = {}
+        for j, value in ipairs(args[i]) do
+          values[#values + 1] = field .. " " .. op .. " " .. escape[dao.meta[field].type](value, dao.driver, dao.model.conn)
+        end
+        return "(" .. table.concat(values, " or ") .. ")"
+      end
+
+      return field .. " " .. op .. " " .. escape[dao.meta[field].type](args[i], dao.driver, dao.model.conn)
+    end)
   end
-  local order = ""
-  if args.order then order = " order by " .. args.order end
-  local field_list, table_list, select, limit
-  if args.distinct then select = "select distinct " else select = "select " end
-  if tonumber(args.count) then limit = " limit " .. tonumber(args.count) else limit = "" end
+
+  local select, order, limit = "SELECT ","", ""
+  if args.distinct then
+    select = select .. " DISTINCT "
+  end
+  if args.order then
+    order = " ORDER BY " .. args.order
+  end
+  if tonumber(args.count) then
+    limit = " limit " .. tonumber(args.count)
+  end
+
+  local field_list, table_list
+
   if args.inject then
     local inject_condition
-    field_list, table_list, inject_condition = build_inject(args.fields, args.inject,
-      dao)
+    field_list, table_list, inject_condition = build_inject(args.fields, args.inject, dao)
     if condition == "" then
-      condition = " where " .. inject_condition
+      condition = " WHERE " .. inject_condition
     else
-      condition = condition .. " and " .. inject_condition
+      condition = condition .. " AND " .. inject_condition
     end
   else
+    field_list = "*"
     if args.fields then
        field_list = table.concat(args.fields, ", ")
-    else
-       field_list = "*"
     end
+    
     table_list = table.concat({ dao.table_name, unpack(args.from or {}) }, ", ")
   end
-  local sql = select .. field_list .. " from " .. table_list ..
-    condition .. order .. limit
+  
+  local sql = select .. field_list .. " FROM " .. table_list .. condition .. order .. limit
   if dao.model.logging then log_query(sql) end
   return sql
 end
@@ -432,8 +458,7 @@ function dao_methods.find_first(dao, condition, args)
 end
 
 function dao_methods.find_all(dao, condition, args)
-  return fetch_rows(dao, build_query(dao, condition, args),
-		    (args and args.count) or (condition and condition.count))
+  return fetch_rows(dao, build_query(dao, condition, args), (args and args.count) or (condition and condition.count))
 end
 
 function dao_methods.new(dao, row)
@@ -453,8 +478,7 @@ local function update(row)
   for k, v in pairs(row_escaped) do
     table.insert(updates, k .. "=" .. v)
   end
-  local sql = "update " .. row.table_name .. " set " ..
-    table.concat(updates, ", ") .. " where id = " .. row.id
+  local sql = "UPDATE " .. row.table_name .. " SET " .. table.concat(updates, ", ") .. " WHERE id=" .. row.id
   if row.model.logging then log_query(sql) end
   local ok, err = row.model.conn:execute(sql)
   if not ok then error(err) end
@@ -476,9 +500,7 @@ local function insert(row)
     table.insert(columns, k)
     table.insert(values, v)
   end
-  local sql = "insert into " .. row.table_name ..
-    " (" .. table.concat(columns, ", ") .. ") values (" ..
-    table.concat(values, ", ") .. ")"
+  local sql = "INSERT INTO " .. row.table_name .. " (" .. table.concat(columns, ", ") .. ") VALUES (" .. table.concat(values, ", ") .. ")"
   if row.model.logging then log_query(sql) end
   local ok, err = row.model.conn:execute(sql)
   if ok then
@@ -498,7 +520,7 @@ end
 
 function dao_methods.delete(row)
   if row.id then
-    local sql = "delete from " .. row.table_name .. " where id = " .. row.id
+    local sql = "DELETE FROM " .. row.table_name .. " WHERE id=" .. row.id
     if row.model.logging then log_query(sql) end
     local ok, err = row.model.conn:execute(sql)
     if ok then row.id = nil else error(err) end
