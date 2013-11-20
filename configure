@@ -1,37 +1,34 @@
 #!/bin/sh
 
-if [ $1 == "--help" ]; then
-  echo "Usage: configure lua51"
-  echo "where lua51 is the name of your Lua executable"
+if [ "$1" = "--help" ]; then
+  echo "Usage: configure lua"
+  echo "where 'lua' is the name of your Lua executable"
   exit 0
 fi
 
 echo "Trying to find where you installed Lua..."
 
-if [ $1 != "" ]; then
+if ! [ "$1" = "" ]; then
   lua=$1
 else
-  lua="lua51"
+  lua="lua"
 fi
 
-lua_bin=`which $lua`
-lua_bin_dir=`dirname $lua_bin`
+lua_root=$(dirname $(dirname $(which $lua)))
 
-lua_root=`dirname $lua_bin_dir`
-
-if [ $lua_root != "" ]; then
-  echo "Lua is in $lua_root"
-  echo "Writing config"
-  lua_share=$lua_root/share/lua/5.1
-  lua_lib=$lua_root/lib/lua/5.1
-  bin_dir=$lua_root/bin
-  echo "LUA_DIR= $lua_share" > config
-  echo "BIN_DIR= $bin_dir" >> config
-  echo "LUA_LIBDIR= $lua_lib" >> config
-  echo "Now run 'make && sudo make install'"
-else
-  echo "Lua not found, please install Lua 5.1 (and put in your PATH)"
+if [ "$lua_root" = "" ]; then
+  echo "Lua not found, please install Lua (and put in your PATH)"
+  exit 1
 fi
+
+lua_version=$($lua -v | sed -r 's|Lua ([0-9]\.[0-9])\..*|\1|I')
+
+echo "Lua is in $lua_root"
+echo "Writing config"
+echo "LUA_DIR="$lua_root"/share/lua/"$lua_version > config
+echo "BIN_DIR="$lua_root"/bin" >> config
+echo "LUA_LIBDIR="$lua_root"/lib/lua/"$lua_version >> config
+echo "Now run 'make && sudo make install'"
 
 if [ -f ./wsapi/configure ]; then
   echo "Configuring wsapi..."
