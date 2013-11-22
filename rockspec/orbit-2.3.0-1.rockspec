@@ -18,7 +18,7 @@ dependencies = {
 }
 
 source = {
-  url = 'http://github.com/downloads/keplerproject/orbit/orbit-2.2.0.tar.gz'
+  url = 'git://github.com/petsagouris/orbit.git'
 }
 
 build = {
