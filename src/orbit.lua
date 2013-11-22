@@ -319,34 +319,37 @@ local function newtag(name)
 end
 
 
-local function htmlify_func(func)
-  local tags = {}
-
-  local env = { H = function (name)
-    local tag = tags[name]
-    if not tag then
-      tag = newtag(name)
-      tags[name] = tag
-    end
-    return tag
-    end
-  }
-
-  local old_env = getfenv(func)
-  setmetatable(env, { __index = function (env, name)
-    if old_env[name] then
-      return old_env[name]
-    end
-    local tag = newtag(name)
-    rawset(env, name, tag)
-    return tag
-  end
-  })
-
-  setfenv(func, env)
-end
-
 function _M.htmlify(app_module, ...)
+
+  local function htmlify_func(func)
+    local tags = {}
+
+    local env = {
+      H = function (name)
+        local tag = tags[name]
+        if not tag then
+          tag = newtag(name)
+          tags[name] = tag
+        end
+        return tag
+      end
+    }
+
+    local old_env = getfenv(func)
+    setmetatable(env, {
+      __index = function (env, name)
+        if old_env[name] then
+          return old_env[name]
+        end
+        local tag = newtag(name)
+        rawset(env, name, tag)
+        return tag
+      end
+    })
+
+    setfenv(func, env)
+  end
+
   if type(app_module) == "function" then
     htmlify_func(app_module)
     for _, func in ipairs{...} do
