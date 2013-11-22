@@ -174,11 +174,6 @@ _M.mime_types = {
 _M.app_module_methods = {}
 local app_module_methods = _M.app_module_methods
 
-_M.web_methods = {}
-local web_methods = _M.web_methods
-
-
-
 function _M.new(app_module)
   app_module = app_module or {}
   if type(app_module) == "string" then
@@ -385,6 +380,10 @@ function app_module_methods.model(app_module, ...)
    end
    return app_module.mapper:new(...)
 end
+
+
+_M.web_methods = {}
+local web_methods = _M.web_methods
 
 function web_methods:redirect(url)
   self.status = "302 Found"
