@@ -428,31 +428,19 @@ function web_methods:content_type(s)
 end
 
 function web_methods:page(name, env)
-  if not orbit.pages then
-    require "orbit.pages"
-  end
-  
-  local filename
-  if name:sub(1, 1) == "/" then
-    filename = self.doc_root .. name
-  else
-    filename = self.real_path .. "/" .. name
-  end
-  
-  local template = orbit.pages.load(filename)
+  local pages = pages or require "orbit.pages"
+  local filename = (name:sub(1, 1) == "/") and self.doc_root .. name or self.real_path .. "/" .. name
+  local template = pages.load(filename)
   if template then
-    return orbit.pages.fill(self, template, env)
+    return pages.fill(self, template, env)
   end
 end
 
 function web_methods:page_inline(contents, env)
-  if not orbit.pages then
-    require "orbit.pages"
-  end
-  
-  local template = orbit.pages.load(nil, contents)
+  local pages = pages or require "orbit.pages"
+  local template = pages.load(nil, contents)
   if template then
-    return orbit.pages.fill(self, template, env)
+    return pages.fill(self, template, env)
   end
 end
 
