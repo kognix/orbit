@@ -479,29 +479,36 @@ local function dispatcher(app_module, method, path, index)
 end
 
 local function make_web_object(app_module, wsapi_env)
+
+  local req = request.new(wsapi_env)
   local web = {
-    status = "200 Ok",
-    response = "",
+    status = '200 OK',
+    response = '',
     headers = {
-      ["Content-Type"]= "text/html"
+      ['Content-Type']= 'text/html'
     },
-    cookies = {
-    }
+    cookies = {},
+    vars = wsapi_env,
+    prefix = app_module.prefix or wsapi_env.SCRIPT_NAME,
+    suffix = app_module.suffix,
+    real_path = (wsapi_env.APP_PATH ~= "") and wsapi_env.APP_PATH or app_module.real_path or ".",
+    doc_root = wsapi_env.DOCUMENT_ROOT,
+    path_info = req.path_info,
+    path_translated = (wsapi_env.PATH_TRANSLATED ~= "") and wsapi_env.PATH_TRANSLATED or wsapi_env.SCRIPT_FILENAME,
+    script_name = wsapi_env.SCRIPT_NAME,
+    method = string.lower(req.method),
+    input = req.params,
+    cookies = req.cookies,
+    GET = req.GET,
+    POST = req.POST
   }
-  setmetatable(web, { __index = web_methods })
 
-  web.vars = wsapi_env
-  web.prefix = app_module.prefix or wsapi_env.SCRIPT_NAME
-  web.suffix = app_module.suffix
+  setmetatable(web, {
+    __index = web_methods
+  })
 
-  web.real_path = wsapi_env.APP_PATH
-  if wsapi_env.APP_PATH == "" then
-    web.real_path = app_module.real_path or "."
-  end
+  local _res = response.new(web.status, web.headers)
 
-  web.doc_root = wsapi_env.DOCUMENT_ROOT
-  local req = wsapi.request.new(wsapi_env)
-  local _res = wsapi.response.new(web.status, web.headers)
   web.set_cookie = function (_, name, value)
     _res:set_cookie(name, value)
   end
@@ -509,17 +516,6 @@ local function make_web_object(app_module, wsapi_env)
   web.delete_cookie = function (_, name, path)
     _res:delete_cookie(name, path)
   end
-
-  web.path_info = req.path_info
-  web.path_translated = wsapi_env.PATH_TRANSLATED
-  if web.path_translated == "" then
-    web.path_translated = wsapi_env.SCRIPT_FILENAME
-  end
-
-  web.script_name = wsapi_env.SCRIPT_NAME
-  web.method = string.lower(req.method)
-  web.input, web.cookies = req.params, req.cookies
-  web.GET, web.POST = req.GET, req.POST
 
   return web, _res
 end
