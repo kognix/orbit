@@ -1,12 +1,8 @@
-local wsapi    = require "wsapi"
-wsapi.request  = require "wsapi.request"
-wsapi.response = require "wsapi.response"
-wsapi.util     = require "wsapi.util"
+local request = require "wsapi.request"
+local response = require "wsapi.response"
+local util = require "wsapi.util"
 
-local _G, setfenv = _G, setfenv
-module("orbit")
-local _M = _M
-setfenv(1, _G)
+local _M = _M or {}
 
 _M._NAME = "orbit"
 _M._VERSION = "2.2.0"
@@ -181,39 +177,7 @@ local app_module_methods = _M.app_module_methods
 _M.web_methods = {}
 local web_methods = _M.web_methods
 
-local function flatten(t)
-   local res = {}
-   for _, item in ipairs(t) do
-      if type(item) == "table" then
-        res[#res + 1] = flatten(item)
-      else
-        res[#res + 1] = item
-      end
-   end
-   return table.concat(res)
-end
 
-local function make_tag(name, data, class)
-  class = class or ""
-  if class then
-    class = ' class="' .. class .. '"'
-  end
-  
-  if not data then
-    return "<" .. name .. class .. "/>"
-  elseif type(data) == "string" then
-    return "<" .. name .. class .. ">" .. data .. "</" .. name .. ">"
-  end
-  
-  local attrs = {}
-  for k, v in pairs(data) do
-    if type(k) == "string" then
-      table.insert(attrs, k .. '="' .. tostring(v) .. '"')
-    end
-  end
-  
-  return "<" .. name .. class .. " " .. table.concat(attrs, " ") .. ">" .. flatten(data) .. "</" .. name .. ">"
-end
 
 function _M.new(app_module)
   app_module = app_module or {}
@@ -229,7 +193,7 @@ function _M.new(app_module)
     return _M.run(app_module, wsapi_env)
   end
   
-  app_module.real_path = wsapi.app_path or "."
+  app_module.real_path = app_path or "."
   app_module.mapper = { default = true }
   app_module.not_found = function (web)
     web.status = "404 Not Found"
@@ -314,6 +278,37 @@ function app_module_methods.serve_static(app_module, web, filename)
 end
 
 local function newtag(name)
+
+  local function flatten(t)
+     local res = {}
+     for _, item in ipairs(t) do
+        res[#res + 1] = (type(item) == "table") and flatten(item) or item
+     end
+     return table.concat(res)
+  end
+
+  local function make_tag(name, data, class)
+    class = class or ""
+    if class then
+      class = ' class="' .. class .. '"'
+    end
+    
+    if not data then
+      return "<" .. name .. class .. "/>"
+    elseif type(data) == "string" then
+      return "<" .. name .. class .. ">" .. data .. "</" .. name .. ">"
+    end
+    
+    local attrs = {}
+    for k, v in pairs(data) do
+      if type(k) == "string" then
+        table.insert(attrs, k .. '="' .. tostring(v) .. '"')
+      end
+    end
+    
+    return "<" .. name .. class .. " " .. table.concat(attrs, " ") .. ">" .. flatten(data) .. "</" .. name .. ">"
+  end
+  
   local tag = {}
   setmetatable(tag, {
     __call = function (_, data)
@@ -327,6 +322,7 @@ local function newtag(name)
   })
   return tag
 end
+
 
 local function htmlify_func(func)
   local tags = {}
@@ -401,7 +397,7 @@ function web_methods:link(url, params)
   local prefix = self.prefix or ""
   local suffix = self.suffix or ""
   for k, v in pairs(params or {}) do
-    link[#link + 1] = k .. "=" .. wsapi.util.url_encode(v)
+    link[#link + 1] = k .. "=" .. util.url_encode(v)
   end
   local qs = table.concat(link, "&")
   
@@ -464,7 +460,7 @@ function web_methods:empty_param(param)
   return self:empty(self.input[param])
 end
 
-for name, func in pairs(wsapi.util) do
+for name, func in pairs(util) do
   web_methods[name] = function (self, ...)
     return func(...)
   end
@@ -487,7 +483,7 @@ local function dispatcher(app_module, method, path, index)
     if #captures > 0 then
       for i = 1, #captures do
         if type(captures[i]) == "string" then
-          captures[i] = wsapi.util.url_decode(captures[i])
+          captures[i] = util.url_decode(captures[i])
         end
       end
       return item.handler, captures, item.wsapi, index
@@ -518,13 +514,13 @@ local function make_web_object(app_module, wsapi_env)
 
   web.doc_root = wsapi_env.DOCUMENT_ROOT
   local req = wsapi.request.new(wsapi_env)
-  local res = wsapi.response.new(web.status, web.headers)
+  local _res = wsapi.response.new(web.status, web.headers)
   web.set_cookie = function (_, name, value)
-    res:set_cookie(name, value)
+    _res:set_cookie(name, value)
   end
 
   web.delete_cookie = function (_, name, path)
-    res:delete_cookie(name, path)
+    _res:delete_cookie(name, path)
   end
 
   web.path_info = req.path_info
@@ -538,7 +534,7 @@ local function make_web_object(app_module, wsapi_env)
   web.input, web.cookies = req.params, req.cookies
   web.GET, web.POST = req.GET, req.POST
 
-  return web, res
+  return web, _res
 end
 
 function _M.run(app_module, wsapi_env)
@@ -546,38 +542,41 @@ function _M.run(app_module, wsapi_env)
   handler = handler or app_module.not_found
   captures = captures or {}
   if wsapi_handler then
-    local ok, status, headers, res = xpcall(function ()
+    local ok, status, headers, _res = xpcall(function ()
       return handler(wsapi_env, unpack(captures))
     end, debug.traceback)
     
     if ok then
-      return status, headers, res
+      return status, headers, _res
     end
     handler, captures = app_module.server_error, { status }
   end
   
-  local web, res = make_web_object(app_module, wsapi_env)
+  local web, _res = make_web_object(app_module, wsapi_env)
   repeat
     local reparse = false
-    local ok, response = xpcall(function () return handler(web, unpack(captures)) end, function(msg) return debug.traceback(msg) end)    
+    local ok, _response = xpcall(
+      function () return handler(web, unpack(captures)) end,
+      function(msg) return debug.traceback(msg)end
+    )
     if not ok then
-      res.status = "500 Internal Server Error"
-      res:write(app_module.server_error(web, response))
+      _res.status = "500 Internal Server Error"
+      _res:write(app_module.server_error(web, _response))
     else
-      if response == REPARSE then
+      if _response == REPARSE then
         reparse = true
         handler, captures, wsapi_handler, index = dispatcher(app_module, string.lower(wsapi_env.REQUEST_METHOD), wsapi_env.PATH_INFO, index)
         handler, captures = handler or app_module.not_found, captures or {}
         if wsapi_handler then
-          error("cannot reparse to WSAPI handler")
+          error("Cannot reparse to WSAPI handler")
         end
       else
-        res.status = web.status
-        res:write(response)
+        _res.status = web.status
+        _res:write(_response)
       end
     end
   until not reparse
-  return res:finish()
+  return _res:finish()
 end
 
 return _M

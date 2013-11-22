@@ -1,12 +1,17 @@
 -- Puts all the definitions below in blog's namespace
-module("blog", package.seeall)
+local _M = _M or {}
+if setfenv then
+  setfenv(1, _M) -- for 5.1
+else
+  _ENV = _M -- for 5.2
+end
 
 blog_title = "Blog"
 cache_path = "page_cache"
 copyright_notice = "Copyright 2007 Foobar"
-about_blurb = [[This is an example of a blog built using Orbit. You
-can browse posts and add comments, but to add new posts you have
-to go directly to the database. This will be fixed in the future.]] 
+about_blurb = [[This is an example of a blog built using Orbit.
+You can browse posts and add comments, but to add new posts you have to go directly to the database.
+This will be fixed in the future.]] 
 
 blogroll = {
   { "http://slashdot.org", "Slashdot"},
@@ -18,10 +23,12 @@ blogroll = {
 -- use_xsendfile = true
 
 database = {
---  driver = "mysql",
+  --  driver = "mysql",
 --  conn_data = { "blog", "root", "password" }
-  driver = "sqlite3",
-  conn_data = { blog.real_path .. "/blog.db" }
+  driver = 'sqlite3',
+  conn_data = {
+    blog.real_path .. '/blog.db'
+  }
 }
 
 recent_count = 7
@@ -134,3 +141,5 @@ end
 function month.en(month)
   return months.en[month.month] .. " " .. month.year
 end
+
+return _M

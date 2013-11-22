@@ -98,12 +98,11 @@ local function gen_page(project, pages, p)
         namelink = cosmo.fill([[<a href="$file.html">$name</a>]], { name = page.name, file = page.file})
       end
       cosmo.yield{ namelink = namelink, sections = function ()
-                                                     for _, s in ipairs(page.sections) do
-                                                       cosmo.yield{ name = s.name, anchor = 
-                                                         page.file .. ".html#" .. s.anchor }
-                                                     end
-                                                   end }
-    end  
+        for _, s in ipairs(page.sections) do
+          cosmo.yield{ name = s.name, anchor = page.file .. ".html#" .. s.anchor }
+        end
+      end }
+    end
   end
   return (cosmo.fill(template, project))
 end

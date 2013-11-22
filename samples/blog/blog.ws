@@ -1,3 +1,3 @@
-require "blog"
+local blog = require "blog"
 
 return blog

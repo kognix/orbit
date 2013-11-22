@@ -2,15 +2,12 @@ local orbit = require "orbit"
 local model = require "orbit.model"
 local cosmo = require "cosmo"
 
-local io, string = io, string
-local setmetatable, loadstring, setfenv = setmetatable, loadstring, setfenv
-local type, error, tostring = type, error, tostring
-local print, pcall, xpcall, traceback = print, pcall, xpcall, debug.traceback
-local select, unpack = select, unpack
-
-local _G = _G
-
-module("orbit.pages", orbit.new)
+local _M = _M or {}
+if setfenv then
+  setfenv(1, _M) -- for 5.1
+else
+  _ENV = _M -- for 5.2
+end
 
 local template_cache = {}
 

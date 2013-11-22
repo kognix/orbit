@@ -5,11 +5,15 @@
 --
 -----------------------------------------------------------------------------
 
-local   wsapi = require ("wsapi")
-wsapi.xavante = require "wsapi.xavante"
-wsapi.common  = require "wsapi.common"
+local xavante = require "wsapi.xavante"
+local common = require "wsapi.common"
 
-module ("orbit.ophandler", package.seeall)
+local _M = _M or {}
+if setfenv then
+  setfenv(1, _M) -- for 5.1
+else
+  _ENV = _M -- for 5.2
+end
 
 -------------------------------------------------------------------------------
 -- Returns the Orbit Pages handler
@@ -20,6 +24,9 @@ function makeHandler (diskpath, params)
   }, {
     __index = params or {}
   })
-  local op_loader = wsapi.common.make_isolated_launcher(params)
-  return wsapi.xavante.makeHandler(op_loader, nil, diskpath)
+  
+  local op_loader = common.make_isolated_launcher(params)
+  return xavante.makeHandler(op_loader, nil, diskpath)
 end
+
+return _M

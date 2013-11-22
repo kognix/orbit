@@ -1,13 +1,18 @@
 #!/usr/bin/env wsapi.cgi
 
-require "orbit"
-require "orbit.cache"
-require "markdown"
+local orbit = require "orbit"
+local cache = require "orbit.cache"
+local markdown = require "markdown"
 
 --
 -- Declares that this is module is an Orbit app
 --
-module("blog", package.seeall, orbit.new)
+local _M = _M or {}
+if setfenv then
+  setfenv(1, _M) -- for 5.1
+else
+  _ENV = _M -- for 5.2
+end
 
 --
 -- Loads configuration data
@@ -17,7 +22,7 @@ require "blog_config"
 --
 -- Initializes DB connection for Orbit's default model mapper
 --
-require("luasql." .. database.driver)
+local db = require("luasql." .. database.driver)
 local env = luasql[database.driver]()
 mapper.conn = env:connect(unpack(database.conn_data))
 mapper.driver = database.driver
@@ -335,43 +340,21 @@ function render_post(web, args)
   if #args.post.comments > 0 then
     res[#res + 1] = h2(strings.comments)
     for _, comment in pairs(args.post.comments) do
-      res[#res + 1 ] = _comment(web, comment)
+      res[#res + 1] = _comment(web, comment)
     end
   end
+
+  local err_msg = args.comment_missing and span{ style="color: red", strings.no_comment } or ''
+
   res[#res + 1] = h2(strings.new_comment)
-  local err_msg = ""
-  if args.comment_missing then
-    err_msg = span{ style="color: red", strings.no_comment }
-  end
   res[#res + 1] = form{
     method = "post",
     action = web:link("/post/" .. args.post.id .. "/addcomment"),
     p{
-      strings.form_name,
-      br(),
-      input{ type="text", name="author", value = web.input.author },
-      br(),
-      br(),
-      strings.form_email,
-      br(),
-      input{ type="text", name="email", value = web.input.email },
-      br(),
-      br(),
-      strings.form_url,
-      br(),
-      input{ type="text", name="url", value = web.input.url },
-      br(),
-      br(),
-      strings.comments .. ":",
-      br(),
-      err_msg,
-      textarea{ name="comment", rows="10", cols="60", web.input.comment },
-      br(),
-      em(" *" .. strings.italics .. "* "),
-      strong(" **" .. strings.bold .. "** "),
-      " [" .. a{ href="/url", strings.link } .. "](http://url) ",
-      br(),
-      br(),
+      strings.form_name, br(), input{ type="text", name="author", value = web.input.author }, br(), br(),
+      strings.form_email, br(), input{ type="text", name="email", value = web.input.email }, br(), br(),
+      strings.form_url, br(), input{ type="text", name="url", value = web.input.url }, br(), br(),
+      strings.comments .. ":", br(), err_msg, textarea{ name="comment", rows="10", cols="60", web.input.comment }, br(), em(" *" .. strings.italics .. "* "), strong(" **" .. strings.bold .. "** ")," [" .. a{ href="/url", strings.link } .. "](http://url) ", br(),br(),
       input.button{ type="submit", value=strings.send }
     }
    }
@@ -380,3 +363,5 @@ end
 
 -- Adds html functions to the view functions
 orbit.htmlify(blog, "layout", "_.+", "render_.+")
+
+return _M

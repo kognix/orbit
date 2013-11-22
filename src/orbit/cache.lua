@@ -1,6 +1,11 @@
 local lfs = require "lfs"
 
-module("orbit.cache", package.seeall)
+local _M = _M or {}
+if setfenv then
+  setfenv(1, _M) -- for 5.1
+else
+  _ENV = _M -- for 5.2
+end
 
 local function pathinfo_to_file(path_info)
   local atom = path_info:find("/xml$")
@@ -129,3 +134,5 @@ function new(app, base_path)
 
   return cache
 end
+
+return _M

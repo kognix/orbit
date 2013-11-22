@@ -1,7 +1,12 @@
 local lpeg = require "lpeg"
-local re   = require "re"
+local re = require "re"
 
-module("orbit.model", package.seeall)
+local _M = _M or {}
+if setfenv then
+  setfenv(1, _M) -- for 5.1
+else
+  _ENV = _M -- for 5.2
+end
 
 model_methods = {}
 
@@ -526,3 +531,5 @@ function dao_methods.delete(row)
     if ok then row.id = nil else error(err) end
   end
 end
+
+return _M
