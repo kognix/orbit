@@ -528,9 +528,10 @@ function _M.run(app_module, wsapi_env)
   handler = handler or app_module.not_found
   captures = captures or {}
   if wsapi_handler then
-    local ok, status, headers, _res = xpcall(function ()
-      return handler(wsapi_env, unpack(captures))
-    end, debug.traceback)
+    local ok, status, headers, _res = xpcall(
+      function () return handler(wsapi_env, unpack(captures)) end,
+      debug.traceback
+    )
     
     if ok then
       return status, headers, _res
@@ -539,6 +540,7 @@ function _M.run(app_module, wsapi_env)
   end
   
   local web, _res = make_web_object(app_module, wsapi_env)
+  
   repeat
     local reparse = false
     local ok, _response = xpcall(
@@ -562,6 +564,7 @@ function _M.run(app_module, wsapi_env)
       end
     end
   until not reparse
+  
   return _res:finish()
 end
 
