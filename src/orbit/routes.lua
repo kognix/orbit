@@ -1,62 +1,49 @@
+local setmetatable, type, ipairs, table, string = setmetatable, type, ipairs, table, string
+
 local lpeg = require "lpeg"
 local re = require "re"
 local util = require "wsapi.util"
 
-local _M = _M or {}
-if setfenv then
-  setfenv(1, _M) -- for 5.1
-else
-  _ENV = _M -- for 5.2
-end
+local _M = {}
 
-local function foldr(t, f, acc)
-  for i = #t, 1, -1 do
-    acc = f(t[i], acc)
-  end
-  return acc
-end
+local alpha = lpeg.R('AZ', 'az')
+local number = lpeg.R('09')
+local asterisk = lpeg.P('*')
+local question_mark = lpeg.P('?')
+local at_sign = lpeg.P('@')
+local colon = lpeg.P(':')
+local the_dot = lpeg.P('.')
+local underscore = lpeg.P('_')
+local forward_slash = lpeg.P('/')
+local slash_or_dot = forward_slash + the_dot
 
-local function foldl(t, f, acc)
-  for i = 1, #t do
-    acc = f(acc, t[i])
-  end
-  return acc
-end
-
-local param = re.compile[[ {[/%.]} ':' {[_%w]+} &('/' / {'.'} / !.) ]] /
+local param = lpeg.C(slash_or_dot) * colon * lpeg.C((alpha + number + underscore)^1) * #(slash_or_dot + -1) /
   function (prefix, name, dot)
-    local extra = {
-      inner = (lpeg.P(1) - lpeg.S("/" .. (dot or "")))^1,
-      close = lpeg.P"/" + lpeg.P(dot or -1) + lpeg.P(-1)
-    }
-
+    local inner = (1 - lpeg.S('/' .. (dot or '')))^1
+    local close = lpeg.P'/' + (dot or -1) + -1
     return {
-      cap = lpeg.Carg(1) * re.compile([[ [/%.] {%inner+} &(%close) ]], extra) / 
-          function (params, item, delim) params[name] = util.url_decode(item) end,
-      clean = re.compile([[ [/%.] %inner &(%close) ]], extra),
+      cap = lpeg.Carg(1) * slash_or_dot * lpeg.C(inner^1) * #close / function (params, item, delim) params[name] = util.url_decode(item) end,
+      clean = slash_or_dot * inner^1 * #close,
       tag = "param",
       name = name,
       prefix = prefix
     }
   end
 
-local opt_param = re.compile[[ {[/%.]} '?:' {[_%w]+} '?' &('/' / {'.'} / !.) ]] / 
+local opt_param = lpeg.C(slash_or_dot) * question_mark * colon * lpeg.C((alpha + number + underscore)^1) * question_mark * #(forward_slash + -1) /
   function (prefix, name, dot)
-    local extra = {
-      inner = (lpeg.P(1) - lpeg.S("/" .. (dot or "")))^1,
-      close = lpeg.P"/" + lpeg.P(dot or -1) + lpeg.P(-1)
-    }
+    local inner = (1 - lpeg.S('/' .. (dot or '')))^1
+    local close = lpeg.P('/') + lpeg.P(dot or -1) + -1
     return {
-      cap = (lpeg.Carg(1) * re.compile([[ [/%.] {%inner+} &(%close) ]], extra) / 
-          function (params, item, delim) params[name] = util.url_decode(item) end)^-1,
-      clean = re.compile([[ [/%.] %inner &(%close) ]], extra)^-1,
+      cap = (lpeg.Carg(1) * slash_or_dot * lpeg.C(inner) * #close / function (params, item, delim) params[name] = util.url_decode(item) end)^-1,
+      clean = (slash_or_dot * inner * #lpeg.C(close))^-1,
       tag = "opt",
       name = name,
       prefix = prefix
     }
   end
 
-local splat = re.compile[[ {[/%.]} {'*'} &('/' / '.' / !.) ]] /
+local splat = lpeg.P(lpeg.C(forward_slash + the_dot) * asterisk * #(forward_slash + the_dot + -1)) /
   function (prefix)
     return {
       cap = "*",
@@ -65,9 +52,9 @@ local splat = re.compile[[ {[/%.]} {'*'} &('/' / '.' / !.) ]] /
     }
   end
 
-local rest = lpeg.C((lpeg.P(1) - param - opt_param - splat)^1)
+local rest = lpeg.C((1 - param - opt_param - splat)^1)
 
-local function fold_caps(cap, acc)
+local function fold_captures(cap, acc)
   if type(cap) == "string" then
     return {
       cap = lpeg.P(cap) * acc.cap,
@@ -75,18 +62,20 @@ local function fold_caps(cap, acc)
     }
   end
 
+  -- if we have a star match (match everything)
   if cap.cap == "*" then
     return {
-      cap = (lpeg.Carg(1) * (lpeg.P(cap.prefix) * lpeg.C((lpeg.P(1) - acc.clean)^0))^-1 / 
+      cap = (lpeg.Carg(1) * (cap.prefix * lpeg.C((1 - acc.clean)^0))^-1 / 
           function (params, splat)
-            if not params.splat then params.splat = {} end
+            params.splat = params.splat or {}
             if splat and splat ~= "" then
               params.splat[#params.splat+1] = util.url_decode(splat)
             end
           end) * acc.cap,
-      clean = (lpeg.P(cap.prefix) * (lpeg.P(1) - acc.clean)^0)^-1 * acc.clean
+      clean = (cap.prefix * (1 - acc.clean)^0)^-1 * acc.clean
     }
   end
+
   return {
     cap = cap.cap * acc.cap,
     clean = cap.clean * acc.clean
@@ -94,12 +83,13 @@ local function fold_caps(cap, acc)
 end
 
 local function fold_parts(parts, cap)
-  if type(cap) == "string" then
+  
+  if type(cap) == "string" then -- if the capture is a string
     parts[#parts+1] = {
       tag = "text",
       text = cap
     }
-  else
+  else                          -- it must be a table capture
     parts[#parts+1] = {
       tag = cap.tag,
       prefix = cap.prefix,
@@ -110,32 +100,43 @@ local function fold_parts(parts, cap)
   return parts
 end
 
-local route = lpeg.Ct((param + opt_param + splat + rest)^1 * lpeg.P(-1)) /
-    function (caps)
-      return foldr(caps, fold_caps, { 
-          cap = lpeg.P("/")^-1 * lpeg.P(-1),
-          clean = lpeg.P("/")^-1 * lpeg.P(-1)
-        }),
-        foldl(caps, fold_parts, {})
-    end
+-- the right part (a bottom to top loop)
+local function fold_right(t, f, acc)
+  for i = #t, 1, -1 do
+    acc = f(t[i], acc)
+  end
+  return acc
+end
+
+-- the left part (a top to bottom loop)
+local function fold_left(t, f, acc)
+  for i = 1, #t do
+    acc = f(acc, t[i])
+  end
+  return acc
+end
+
+local route = lpeg.Ct((param + opt_param + splat + rest)^0 * -1) / function (caps)
+  local forward_slash_at_end = lpeg.P('/')^-1 * -1
+  return fold_right(caps, fold_captures, { cap = forward_slash_at_end, clean = forward_slash_at_end }), fold_left(caps, fold_parts, {})
+end
 
 local function build(parts, params)
-  local res = {}
-  local i = 1
+  local res, i = {}, 1
   params = params or {}
   params.splat = params.splat or {}
   for _, part in ipairs(parts) do
-    if part.tag == "param" then
-      if not params[part.name] then error("route parameter " .. part.name .. " does not exist") end
-      local s = string.gsub (params[part.name], "([^%.@]+)", function (s) return util.url_encode(s) end)
+    if part.tag == 'param' then
+      if not params[part.name] then error('route parameter ' .. part.name .. ' does not exist') end
+      local s = string.gsub (params[part.name], '([^%.@]+)', function (s) return util.url_encode(s) end)
       res[#res+1] = part.prefix .. s
     elseif part.tag == "splat" then
-      local s = string.gsub (params.splat[i] or "", "([^/%.@]+)", function (s) return util.url_encode(s) end)
+      local s = string.gsub (params.splat[i] or '', '([^/%.@]+)', function (s) return util.url_encode(s) end)
       res[#res+1] = part.prefix .. s
       i = i + 1
     elseif part.tag == "opt" then
       if params and params[part.name] then
-        local s = string.gsub (params[part.name], "([^%.@]+)", function (s) return util.url_encode(s) end)
+        local s = string.gsub (params[part.name], '([^%.@]+)', function (s) return util.url_encode(s) end)
         res[#res+1] = part.prefix .. s
       end
     else
@@ -146,12 +147,13 @@ local function build(parts, params)
   if #res > 0 then
     return table.concat(res)
   end
-
-  return "/"
+  
+  return '/'
 end
 
 function _M.R(path)
   local p, b = route:match(path)
+  
   return setmetatable({
     parser = p.cap,
     parts = b
@@ -169,6 +171,7 @@ function _M.R(path)
       end
     }
   })
+
 end
 
 return setmetatable(_M, {
