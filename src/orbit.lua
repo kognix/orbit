@@ -1,11 +1,12 @@
 local request = require "wsapi.request"
 local response = require "wsapi.response"
 local util = require "wsapi.util"
+local htmlify = require "orbit.htmlify"
 
 local _M = _M or {}
 
 _M._NAME = "orbit"
-_M._VERSION = "2.2.0"
+_M._VERSION = "2.3.0"
 _M._COPYRIGHT = "Copyright (C) 2007-2010 Kepler Project"
 _M._DESCRIPTION = "MVC Web Development for the Kepler platform"
 
@@ -174,6 +175,78 @@ _M.mime_types = {
 _M.app_module_methods = {}
 local app_module_methods = _M.app_module_methods
 
+function app_module_methods.dispatch_get(app_module, func, ...)
+  for _, pat in ipairs{ ... } do
+    table.insert(app_module.dispatch_table.get, { pattern = pat, handler = func })
+  end
+end
+
+function app_module_methods.dispatch_post(app_module, func, ...)
+  for _, pat in ipairs{ ... } do
+    table.insert(app_module.dispatch_table.post, { pattern = pat, handler = func })
+  end
+end
+
+function app_module_methods.dispatch_put(app_module, func, ...)
+  for _, pat in ipairs{ ... } do
+    table.insert(app_module.dispatch_table.put, { pattern = pat, handler = func })
+  end
+end
+
+function app_module_methods.dispatch_delete(app_module, func, ...)
+  for _, pat in ipairs{ ... } do
+    table.insert(app_module.dispatch_table.delete, { pattern = pat, handler = func })
+  end
+end
+
+function app_module_methods.dispatch_wsapi(app_module, func, ...)
+  for _, pat in ipairs{ ... } do
+    for _, tab in pairs(app_module.dispatch_table) do
+      table.insert(tab, { pattern = pat, handler = func, wsapi = true })
+    end
+  end
+end
+
+local function serve_file(app_module)
+  return function (web)
+    return app_module:serve_static(web, web.real_path .. web.path_info)
+  end
+end
+
+function app_module_methods.dispatch_static(app_module, ...)
+  app_module:dispatch_get(serve_file(app_module), ...)
+end
+
+function app_module_methods.serve_static(app_module, web, filename)
+  local ext = string.match(filename, "%.([^%.]+)$")
+  if app_module.use_xsendfile then
+    web.headers["Content-Type"] = _M.mime_types[ext] or "application/octet-stream"
+    web.headers["X-Sendfile"] = filename
+    return "xsendfile"
+  end
+  
+  local file = io.open(filename, "rb")
+  if not file then
+    return app_module.not_found(web)
+  end
+    
+  web.headers["Content-Type"] = _M.mime_types[ext] or "application/octet-stream"
+  local contents = file:read("*a")
+  file:close()
+  return contents
+end
+
+app_module_methods.htmlify = htmlify
+
+function app_module_methods.model(app_module, ...)
+  if app_module.mapper.default then
+    local table_prefix = (app_module._NAME and app_module._NAME .. "_") or ""
+    if not model then local model = require "orbit.model" end
+    app_module.mapper = model.new(app_module.mapper.table_prefix or table_prefix, app_module.mapper.conn, app_module.mapper.driver, app_module.mapper.logging)
+  end
+  return app_module.mapper:new(...)
+end
+
 function _M.new(app_module)
   app_module = app_module or {}
   if type(app_module) == "string" then
@@ -210,180 +283,6 @@ function _M.new(app_module)
 
   return app_module
 end
-
-local function serve_file(app_module)
-  return function (web)
-    return app_module:serve_static(web, web.real_path .. web.path_info)
-  end
-end
-
-function app_module_methods.dispatch_get(app_module, func, ...)
-  for _, pat in ipairs{ ... } do
-    table.insert(app_module.dispatch_table.get, { pattern = pat, handler = func })
-  end
-end
-
-function app_module_methods.dispatch_post(app_module, func, ...)
-  for _, pat in ipairs{ ... } do
-    table.insert(app_module.dispatch_table.post, { pattern = pat, handler = func })
-  end
-end
-
-function app_module_methods.dispatch_put(app_module, func, ...)
-  for _, pat in ipairs{ ... } do
-    table.insert(app_module.dispatch_table.put, { pattern = pat, handler = func })
-  end
-end
-
-function app_module_methods.dispatch_delete(app_module, func, ...)
-  for _, pat in ipairs{ ... } do
-    table.insert(app_module.dispatch_table.delete, { pattern = pat, handler = func })
-  end
-end
-
-function app_module_methods.dispatch_wsapi(app_module, func, ...)
-  for _, pat in ipairs{ ... } do
-    for _, tab in pairs(app_module.dispatch_table) do
-      table.insert(tab, { pattern = pat, handler = func, wsapi = true })
-    end
-  end
-end
-
-function app_module_methods.dispatch_static(app_module, ...)
-  app_module:dispatch_get(serve_file(app_module), ...)
-end
-
-function app_module_methods.serve_static(app_module, web, filename)
-  local ext = string.match(filename, "%.([^%.]+)$")
-  if app_module.use_xsendfile then
-    web.headers["Content-Type"] = _M.mime_types[ext] or "application/octet-stream"
-    web.headers["X-Sendfile"] = filename
-    return "xsendfile"
-  end
-  
-  local file = io.open(filename, "rb")
-  if not file then
-    return app_module.not_found(web)
-  end
-    
-  web.headers["Content-Type"] = _M.mime_types[ext] or "application/octet-stream"
-  local contents = file:read("*a")
-  file:close()
-  return contents
-end
-
-local function newtag(name)
-
-  local function flatten(t)
-     local res = {}
-     for _, item in ipairs(t) do
-        res[#res + 1] = (type(item) == "table") and flatten(item) or item
-     end
-     return table.concat(res)
-  end
-
-  local function make_tag(name, data, class)
-    class = class or ""
-    if class then
-      class = ' class="' .. class .. '"'
-    end
-    
-    if not data then
-      return "<" .. name .. class .. "/>"
-    elseif type(data) == "string" then
-      return "<" .. name .. class .. ">" .. data .. "</" .. name .. ">"
-    end
-    
-    local attrs = {}
-    for k, v in pairs(data) do
-      if type(k) == "string" then
-        table.insert(attrs, k .. '="' .. tostring(v) .. '"')
-      end
-    end
-    
-    return "<" .. name .. class .. " " .. table.concat(attrs, " ") .. ">" .. flatten(data) .. "</" .. name .. ">"
-  end
-  
-  local tag = {}
-  setmetatable(tag, {
-    __call = function (_, data)
-      return make_tag(name, data)
-    end,
-    __index = function(_, class)
-      return function (data)
-        return make_tag(name, data, class)
-      end
-    end
-  })
-  return tag
-end
-
-
-function _M.htmlify(app_module, ...)
-
-  local function htmlify_func(func)
-    local tags = {}
-
-    local env = {
-      H = function (name)
-        local tag = tags[name]
-        if not tag then
-          tag = newtag(name)
-          tags[name] = tag
-        end
-        return tag
-      end
-    }
-
-    local old_env = getfenv(func)
-    setmetatable(env, {
-      __index = function (env, name)
-        if old_env[name] then
-          return old_env[name]
-        end
-        local tag = newtag(name)
-        rawset(env, name, tag)
-        return tag
-      end
-    })
-
-    setfenv(func, env)
-  end
-
-  if type(app_module) == "function" then
-    htmlify_func(app_module)
-    for _, func in ipairs{...} do
-      htmlify_func(func)
-    end
-  else
-    local patterns = { ... }
-    for _, patt in ipairs(patterns) do
-      if type(patt) == "function" then
-        htmlify_func(patt)
-      else
-        for name, func in pairs(app_module) do
-          if string.match(name, "^" .. patt .. "$") and type(func) == "function" then
-            htmlify_func(func)
-          end
-        end
-      end
-    end
-  end
-end
-
-app_module_methods.htmlify = _M.htmlify
-
-function app_module_methods.model(app_module, ...)
-  if app_module.mapper.default then
-    local table_prefix = (app_module._NAME and app_module._NAME .. "_") or ""
-      if not orbit.model then
-        require "orbit.model"
-      end
-      app_module.mapper = orbit.model.new(app_module.mapper.table_prefix or table_prefix, app_module.mapper.conn, app_module.mapper.driver, app_module.mapper.logging)
-   end
-   return app_module.mapper:new(...)
-end
-
 
 _M.web_methods = {}
 local web_methods = _M.web_methods
