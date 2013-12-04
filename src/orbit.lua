@@ -16,28 +16,26 @@ local REPARSE = {}
 _M.app_module_methods = {}
 local app_module_methods = _M.app_module_methods
 
-function app_module_methods.dispatch_get(app_module, func, ...)
+local function dispatch_method(method, app_module, func, ...)
   for _, pat in ipairs{ ... } do
-    table.insert(app_module.dispatch_table.get, { pattern = pat, handler = func })
+    table.insert(app_module.dispatch_table[method], { pattern = pat, handler = func })
   end
+end
+
+function app_module_methods.dispatch_get(app_module, func, ...)
+  dispatch_method('get', app_module, func, ...)
 end
 
 function app_module_methods.dispatch_post(app_module, func, ...)
-  for _, pat in ipairs{ ... } do
-    table.insert(app_module.dispatch_table.post, { pattern = pat, handler = func })
-  end
+  dispatch_method('post', app_module, func, ...)
 end
 
 function app_module_methods.dispatch_put(app_module, func, ...)
-  for _, pat in ipairs{ ... } do
-    table.insert(app_module.dispatch_table.put, { pattern = pat, handler = func })
-  end
+  dispatch_method('put', app_module, func, ...)
 end
 
 function app_module_methods.dispatch_delete(app_module, func, ...)
-  for _, pat in ipairs{ ... } do
-    table.insert(app_module.dispatch_table.delete, { pattern = pat, handler = func })
-  end
+  dispatch_method('delete', app_module, func, ...)
 end
 
 function app_module_methods.dispatch_wsapi(app_module, func, ...)
@@ -206,8 +204,10 @@ local function dispatcher(app_module, method, path, index)
     local item = app_module.dispatch_table[method][index]
     local captures
     if type(item.pattern) == "string" then
+      -- capture by lua pattern
       captures = { string.match(path, "^" .. item.pattern .. "$") }
     else
+      -- capture by lpeg pattern
       captures = { item.pattern:match(path) }
     end
     if #captures > 0 then
@@ -245,7 +245,7 @@ local function make_web_object(app_module, wsapi_env)
     GET = req.GET,
     POST = req.POST
   }
-
+  
   setmetatable(web, {
     __index = web_methods
   })
@@ -269,7 +269,7 @@ function _M.run(app_module, wsapi_env)
   captures = captures or {}
   if wsapi_handler then
     local ok, status, headers, _res = xpcall(
-      function () return handler(wsapi_env, unpack(captures)) end,
+      function() return handler(wsapi_env, unpack(captures)) end,
       debug.traceback
     )
     
@@ -284,8 +284,8 @@ function _M.run(app_module, wsapi_env)
   repeat
     local reparse = false
     local ok, _response = xpcall(
-      function () return handler(web, unpack(captures)) end,
-      function(msg) return debug.traceback(msg)end
+      function() return handler(web, unpack(captures)) end,
+      function(msg) return debug.traceback(msg) end
     )
     if not ok then
       _res.status = "500 Internal Server Error"
